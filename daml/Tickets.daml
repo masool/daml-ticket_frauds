@@ -1,0 +1,92 @@
+module Tickets where
+
+template Create_token
+  with
+    organiser : Party
+    currency_token : Text
+    token_price : Decimal
+  where
+    ensure currency_token == "NTTGBP" && token_price == 100.0
+    signatory organiser
+    controller organiser can
+     nonconsuming Create_Tickets : ContractId Organiser_ticket 
+      with
+          total_tickets : Decimal
+      do
+      let price = total_tickets*token_price
+      create Organiser_ticket with total_tickets, available_tickets = total_tickets, total_ticket_price = price,..
+
+template Organiser_ticket
+    with
+       organiser : Party
+       total_tickets : Decimal
+       available_tickets : Decimal
+       currency_token : Text
+       token_price : Decimal
+       total_ticket_price : Decimal
+    where
+      signatory organiser
+      
+template Buy_ticket
+  with
+    owner : Party
+    organiser : Party
+    quantity : Decimal
+    currency_token : Text
+  where
+    ensure (quantity > 0.0 && quantity <= 1000.0 && currency_token == "NTTGBP")
+    signatory owner
+    observer organiser
+    controller organiser can
+     Accept_Request : (ContractId Primary_Market) with
+       agreeCid : ContractId Organiser_ticket
+        do 
+        agree <- fetch agreeCid
+        let price  = quantity * agree.token_price
+        assert(quantity <= agree.available_tickets)
+        _ <- exercise agreeCid Archive
+        quotient <- create agree with available_tickets = agree.available_tickets - quantity, total_ticket_price = agree.total_ticket_price - price
+        create Primary_Market with available_tickets = quantity, total_ticket_price = price, currency_token = agree.currency_token,token_price = agree.token_price, ..
+
+template Primary_Market
+  with
+    owner : Party
+    organiser : Party
+    quantity : Decimal
+    currency_token : Text
+    available_tickets : Decimal
+    total_ticket_price : Decimal
+    token_price : Decimal
+  where
+    signatory owner
+    observer organiser, owner
+    controller owner can
+      Sell_Ticket : ContractId Secondary_Market
+        with newowner : Party, quantity1 : Decimal, second_price : Decimal
+        do
+        assert(second_price <= quantity1*token_price*110.0/100.0+quantity1*token_price && quantity1 <= this.quantity)
+        let result = this.quantity - quantity1
+        quotient <- create this with quantity = this.quantity - quantity1, available_tickets = this.quantity - quantity1, total_ticket_price = result*token_price
+        create Secondary_Market with quantity = quantity1, available_tickets = quantity1,newowner, 
+                                      total_ticket_price = second_price,currency_token = this.currency_token,token_price = this.token_price,..
+
+template Secondary_Market
+  with
+    owner : Party
+    newowner : Party
+    organiser : Party
+    quantity : Decimal
+    currency_token : Text
+    available_tickets : Decimal
+    total_ticket_price : Decimal
+    token_price : Decimal
+  where
+    signatory owner
+    observer organiser, newowner
+    
+        
+          
+        
+          
+    
+    
